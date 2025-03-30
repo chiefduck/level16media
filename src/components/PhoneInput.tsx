@@ -4,7 +4,8 @@ import { Button } from './Button';
 
 // Define Bland.ai API response type
 interface BlandAIResponse {
-  success: boolean;
+  success?: boolean;
+  status?: string;
   call_id?: string;
   error?: string;
 }
@@ -12,6 +13,8 @@ interface BlandAIResponse {
 /**
  * PhoneInput component props
  * @property className - Additional CSS classes
+ * @property collectName - Whether to collect name input
+ * @property collectEmail - Whether to collect email input
  */
 interface PhoneInputProps {
   className?: string;
@@ -56,6 +59,17 @@ export function PhoneInput({
   };
 
   /**
+   * Validates email format
+   * @param email - Email to validate
+   * @returns boolean indicating if format is valid
+   */
+  const validateEmail = (email: string) => {
+    // Only validate if there's input or if email collection is required
+    if (!email && !collectEmail) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  /**
    * Formats phone number as user types
    * Format: (XXX) XXX-XXXX
    * @param value - Raw phone input
@@ -67,17 +81,6 @@ export function PhoneInput({
     if (numbers.length <= 3) return numbers;
     if (numbers.length <= 6) return `(${numbers.slice(0, 3)}) ${numbers.slice(3)}`;
     return `(${numbers.slice(0, 3)}) ${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
-  };
-
-  /**
-   * Validates email format
-   * @param email - Email to validate
-   * @returns boolean indicating if format is valid
-   */
-  const validateEmail = (email: string) => {
-    // Only validate if there's input or if email collection is required
-    if (!email && !collectEmail) return true;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
   /**
@@ -128,8 +131,9 @@ export function PhoneInput({
     setError(null);
     
     try {
+      console.log("Initiating demo call to:", phoneNumber);
+      
       // Making a request to your Netlify serverless function
-      // This keeps your API key secure
       const response = await fetch('/.netlify/functions/start-demo-call', {
         method: 'POST',
         headers: {
@@ -137,30 +141,41 @@ export function PhoneInput({
         },
         body: JSON.stringify({
           phone_number: getDigitsOnly(phoneNumber),
-          // Include name and email for CRM if provided
           name: name || undefined,
           email: email || undefined,
-          // You can include any additional parameters needed for your Bland.ai pathway
-          pathway_id: '9a8707c9-35e6-4a4e-a1d3-4a5c445697ff' // Replace with your actual Bland.ai pathway ID
+          // Replace with your actual Bland.ai pathway ID
+          pathway_id: "9a8707c9-35e6-4a4e-a1d3-4a5c445697ff"
         })
       });
-
+      
+      console.log("API Response Status:", response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to initiate call');
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || `Server error: ${response.status}`);
+        } catch (e) {
+          throw new Error(`Server error: ${response.status}`);
+        }
       }
       
-      const data: BlandAIResponse = await response.json();
+      const data = await response.json();
+      console.log("API Response Data:", data);
       
-      if (data.success && data.call_id) {
-        setCallId(data.call_id);
+      // More flexible success checking
+      if (data.success === true || data.status === "success" || data.call_id) {
+        console.log("Call initiated successfully, ID:", data.call_id);
+        setCallId(data.call_id || "unknown");
         setSubmitted(true);
       } else {
-        setError(data.error || 'Failed to initiate call. Please try again.');
+        console.error("API returned success=false:", data);
+        setError(data.error || "Failed to initiate call. Please try again.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while connecting to our service. Please try again later.');
-      console.error('Demo call error:', err);
+      console.error("Full error details:", err);
+      setError(err instanceof Error ? err.message : "An error occurred while connecting to our service. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -202,6 +217,8 @@ export function PhoneInput({
   const resetForm = () => {
     setSubmitted(false);
     setPhone('');
+    setName('');
+    setEmail('');
     setCallId(null);
     setError(null);
   };
@@ -211,14 +228,16 @@ export function PhoneInput({
       <div className={`text-center ${className}`}>
         <div className="bg-green-50 rounded-xl p-6 space-y-3">
           <div className="text-green-600 font-semibold text-lg">
-            Thanks! We're calling you right now
+            Your demo call has been initiated!
           </div>
           <div className="text-green-600">
-            {phone}
+            Calling {phone} now...
           </div>
-          <p className="text-sm text-gray-600">
-            Call ID: {callId}
-          </p>
+          {callId && callId !== "unknown" && (
+            <div className="text-xs text-gray-500">
+              Call ID: {callId}
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
