@@ -141,7 +141,7 @@ export function PhoneInput({
           name: name || undefined,
           email: email || undefined,
           // You can include any additional parameters needed for your Bland.ai pathway
-          pathway_id: 'your_pathway_id' // Replace with your actual Bland.ai pathway ID
+          pathway_id: '9a8707c9-35e6-4a4e-a1d3-4a5c445697ff' // Replace with your actual Bland.ai pathway ID
         })
       });
 
