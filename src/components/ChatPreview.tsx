@@ -1,42 +1,48 @@
+// ChatPreview.tsx
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, X, Minimize2, Bot } from 'lucide-react';
 
-/**
- * Demo conversation flow for the chat preview
- * Each message includes:
- * @property type - 'bot' or 'user' to determine message styling
- * @property text - The actual message content
- */
-const messages = [
-  { type: 'bot', text: "👋 Hi! I'm your AI assistant. How can I help you today?" },
-  { type: 'user', text: "I'm interested in the AI voice assistant." },
-  { type: 'bot', text: "Great choice! Our AI voice assistant can handle calls 24/7, qualify leads, and book appointments automatically. Would you like to see a quick demo?" },
-  { type: 'user', text: "Yes, please!" },
-  { type: 'bot', text: "I'll schedule a personalized demo for you. What's the best time for a 15-minute call this week?" }
-];
-
-/**
- * ChatPreview Component
- * Floating chat widget that demonstrates AI conversation capabilities
- * Features:
- * - Animated message sequence
- * - Minimize/maximize functionality
- * - Mobile-responsive design
- */
 export function ChatPreview() {
-  // State for chat visibility and animation
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [currentMessage, setCurrentMessage] = useState(0);
+  const [messages, setMessages] = useState([
+    { type: 'bot', text: "👋 Hi! I'm your AI assistant. How can I help you today?" },
+  ]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && currentMessage < messages.length - 1) {
-      const timer = setTimeout(() => {
-        setCurrentMessage(prev => prev + 1);
-      }, 2000);
-      return () => clearTimeout(timer);
+  const handleSendMessage = async () => {
+    if (!input.trim()) return;
+
+    const newMessages = [...messages, { type: 'user', text: input }];
+    setMessages(newMessages);
+    setInput('');
+    setIsTyping(true);
+
+    try {
+      const res = await fetch('/.netlify/functions/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input }),
+      });
+
+      const data = await res.json();
+      setMessages([...newMessages, { type: 'bot', text: data.reply }]);
+    } catch (err) {
+      setMessages([
+        ...newMessages,
+        { type: 'bot', text: "Sorry, something went wrong. Try again later." },
+      ]);
+    } finally {
+      setIsTyping(false);
     }
-  }, [isOpen, currentMessage]);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSendMessage();
+    }
+  };
 
   if (!isOpen) {
     return (
@@ -79,7 +85,7 @@ export function ChatPreview() {
       {!isMinimized && (
         <>
           <div className="h-[380px] overflow-y-auto p-4 space-y-4">
-            {messages.slice(0, currentMessage + 1).map((message, idx) => (
+            {messages.map((message, idx) => (
               <div
                 key={idx}
                 className={`flex ${
@@ -97,6 +103,14 @@ export function ChatPreview() {
                 </div>
               </div>
             ))}
+
+            {isTyping && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] p-3 rounded-2xl bg-gray-100 text-gray-800 animate-pulse">
+                  Typing...
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="p-4 border-t">
@@ -104,9 +118,15 @@ export function ChatPreview() {
               <input
                 type="text"
                 placeholder="Type your message..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-300"
               />
-              <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+              <button
+                onClick={handleSendMessage}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
                 Send
               </button>
             </div>

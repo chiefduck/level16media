@@ -22,8 +22,6 @@ exports.handler = async function(event, context) {
     const name = body.name || 'Website Visitor';
     const email = body.email || '';
     
-    console.log("Request received for phone:", phoneNumber);
-    
     // Validate phone number
     if (!phoneNumber || !/^\d{10}$/.test(phoneNumber)) {
       console.log("Invalid phone number format");
@@ -40,16 +38,11 @@ exports.handler = async function(event, context) {
     }
 
     // Get the API keys from environment variables
-    const blandApiKey = process.env.BLAND_AI_API_KEY;
-    const ghlApiKey = process.env.GHL_API_KEY;
+    const aiApiKey = process.env.BLAND_AI_API_KEY;
+    const crmApiKey = process.env.GHL_API_KEY;
     
-    console.log("API keys present:", {
-      bland: !!blandApiKey,
-      ghl: !!ghlApiKey
-    });
-    
-    if (!blandApiKey) {
-      console.error("Bland AI API key is missing");
+    if (!aiApiKey) {
+      console.error("AI service API key is missing");
       return {
         statusCode: 500,
         headers: {
@@ -57,19 +50,19 @@ exports.handler = async function(event, context) {
         },
         body: JSON.stringify({ 
           success: false, 
-          error: "Bland AI API key is not configured" 
+          error: "API key is not configured" 
         })
       };
     }
 
-    // Make the request to Bland.ai
-    console.log("Making Bland.ai API request with pathway:", pathwayId);
+    // Make the request to AI service
+    console.log("Initiating outbound call");
     
-    const blandResponse = await fetch('https://api.bland.ai/v1/calls', {
+    const aiResponse = await fetch('https://api.bland.ai/v1/calls', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${blandApiKey}`
+        'Authorization': `Bearer ${aiApiKey}`
       },
       body: JSON.stringify({
         phone_number: phoneNumber,
@@ -79,174 +72,157 @@ exports.handler = async function(event, context) {
       })
     });
     
-    // Log raw response for debugging
-    console.log("Bland.ai response status:", blandResponse.status);
+    // Log response status for debugging
+    console.log("Service response status:", aiResponse.status);
     
-    const blandData = await blandResponse.json();
-    console.log("Bland.ai response data:", JSON.stringify(blandData));
+    const callData = await aiResponse.json();
     
-    // Handle unsuccessful responses from Bland.ai
-    if (!blandResponse.ok) {
-      console.error("Bland.ai API error:", blandData);
+    // Handle unsuccessful responses
+    if (!aiResponse.ok) {
+      console.error("API error occurred");
       return {
-        statusCode: blandResponse.status,
+        statusCode: aiResponse.status,
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           success: false,
-          error: blandData.error || "Error from Bland.ai API"
+          error: callData.error || "Error from API service"
         })
       };
     }
     
-    // If we have a GHL API key, create/update contact in Go High Level
-    if (ghlApiKey && (blandData.success || blandData.call_id)) {
+    // If we have a CRM API key, create/update contact
+    if (crmApiKey && (callData.success || callData.call_id)) {
       try {
-        console.log("Starting GHL integration");
+        console.log("Starting CRM integration");
         
-        // Format phone number for GHL (add +1 prefix for US numbers)
+        // Format phone number for CRM (add +1 prefix for US numbers)
         const formattedPhone = `+1${phoneNumber}`;
         
         // Current timestamp for tracking
         const timestamp = new Date().toISOString();
         
-        // First check if contact already exists in GHL
-        console.log("Looking up GHL contact with phone:", formattedPhone);
+        // First check if contact already exists in CRM
+        console.log("Looking up contact in CRM");
         
         const searchResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/lookup?phone=${encodeURIComponent(formattedPhone)}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${ghlApiKey}`,
+            'Authorization': `Bearer ${crmApiKey}`,
             'Content-Type': 'application/json'
           }
         });
         
-        // Log raw GHL search response for debugging
-        console.log("GHL search response status:", searchResponse.status);
+        // Log response status for debugging
+        console.log("CRM search status:", searchResponse.status);
         
         if (!searchResponse.ok) {
-          const errorText = await searchResponse.text();
-          console.error("GHL search error:", errorText);
-          throw new Error(`GHL search failed: ${searchResponse.status}`);
+          console.error("CRM search failed");
+          throw new Error(`CRM search failed: ${searchResponse.status}`);
         }
         
         const searchData = await searchResponse.json();
-        console.log("GHL search response:", JSON.stringify(searchData));
         
         let contactId = searchData?.contacts?.[0]?.id;
         let isNewContact = !contactId;
         
-        console.log("Contact found in GHL:", !isNewContact, "Contact ID:", contactId);
+        console.log("Contact status:", isNewContact ? "Creating new" : "Updating existing");
         
-        // Contact data to send to GHL
+        // Contact data to send to CRM
         const contactData = {
           phone: formattedPhone,
           name: name,
           email: email,
           customField: {
             "last_demo_call": timestamp,
-            "demo_call_id": blandData.call_id || ''
+            "demo_call_id": callData.call_id || ''
           },
-          tags: ["Demo Call", "Bland AI Demo"],
+          tags: ["Demo Call", "AI Demo"],
           source: "Website Demo"
         };
         
-        console.log("Preparing to create/update GHL contact:", JSON.stringify(contactData));
-        
-        let ghlResponse;
+        let crmResponse;
         
         if (isNewContact) {
           // Create new contact
-          console.log("Creating new GHL contact");
-          
-          ghlResponse = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+          crmResponse = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${ghlApiKey}`,
+              'Authorization': `Bearer ${crmApiKey}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(contactData)
           });
         } else {
           // Update existing contact
-          console.log("Updating existing GHL contact:", contactId);
-          
-          ghlResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
+          crmResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
             method: 'PUT',
             headers: {
-              'Authorization': `Bearer ${ghlApiKey}`,
+              'Authorization': `Bearer ${crmApiKey}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(contactData)
           });
         }
         
-        // Log raw GHL response
-        console.log("GHL create/update response status:", ghlResponse.status);
+        // Log response status for debugging
+        console.log("CRM update status:", crmResponse.status);
         
-        if (!ghlResponse.ok) {
-          const errorText = await ghlResponse.text();
-          console.error("GHL create/update error:", errorText);
-          throw new Error(`GHL operation failed: ${ghlResponse.status}`);
+        if (!crmResponse.ok) {
+          console.error("CRM update failed");
+          throw new Error(`CRM operation failed: ${crmResponse.status}`);
         }
         
-        const ghlData = await ghlResponse.json();
-        console.log("GHL create/update response:", JSON.stringify(ghlData));
+        const crmData = await crmResponse.json();
         
         // Add a note about the demo call
-        if (contactId || (!isNewContact && ghlResponse.ok)) {
+        if (contactId || (!isNewContact && crmResponse.ok)) {
           // If we just created the contact, get the new ID
-          if (isNewContact && ghlResponse.ok) {
-            const newContactData = ghlData;
+          if (isNewContact && crmResponse.ok) {
+            const newContactData = crmData;
             contactId = newContactData?.contact?.id || newContactData?.id;
-            console.log("New contact created with ID:", contactId);
+            console.log("New contact created");
           }
           
           if (contactId) {
             // Add a note to the contact
-            console.log("Adding note to GHL contact:", contactId);
+            console.log("Adding note to contact");
             
             const noteResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}/notes`, {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${ghlApiKey}`,
+                'Authorization': `Bearer ${crmApiKey}`,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                body: `Demo call initiated on ${new Date().toLocaleString()}. Call ID: ${blandData.call_id || 'N/A'}`
+                body: `Demo call initiated on ${new Date().toLocaleString()}.`
               })
             });
             
-            console.log("GHL note response status:", noteResponse.status);
+            console.log("Note creation status:", noteResponse.status);
             
             if (!noteResponse.ok) {
-              const errorText = await noteResponse.text();
-              console.error("GHL note error:", errorText);
-            } else {
-              const noteData = await noteResponse.json();
-              console.log("GHL note response:", JSON.stringify(noteData));
+              console.error("Note creation failed");
             }
           }
         }
         
-        console.log("GHL integration completed successfully");
-      } catch (ghlError) {
-        // Log GHL error but don't fail the overall request
-        console.error("Error with GHL integration:", ghlError);
+        console.log("CRM integration completed");
+      } catch (crmError) {
+        // Log CRM error but don't fail the overall request
+        console.error("Error with CRM integration");
       }
     }
 
     // Add tags to the response for successful debugging
     const responseData = {
-      ...blandData,
-      ghl_integration_attempted: !!ghlApiKey,
+      ...callData,
+      crm_integration_attempted: !!crmApiKey,
       timestamp: new Date().toISOString()
     };
-    
-    console.log("Sending final response to client:", JSON.stringify(responseData));
 
-    // Return the response from Bland.ai
+    // Return the response
     return {
       statusCode: 200,
       headers: {
@@ -256,7 +232,7 @@ exports.handler = async function(event, context) {
     };
 
   } catch (error) {
-    console.error("Unhandled error in function:", error);
+    console.error("Unhandled error in function");
     
     return {
       statusCode: 500,
@@ -265,7 +241,7 @@ exports.handler = async function(event, context) {
       },
       body: JSON.stringify({
         success: false,
-        error: error.message || "An unexpected error occurred while processing your request."
+        error: "An unexpected error occurred while processing your request."
       })
     };
   }

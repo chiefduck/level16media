@@ -131,8 +131,6 @@ export function PhoneInput({
     setError(null);
     
     try {
-      console.log("Initiating demo call to:", phoneNumber);
-      
       // Making a request to your Netlify serverless function
       const response = await fetch('/.netlify/functions/start-demo-call', {
         method: 'POST',
@@ -148,11 +146,8 @@ export function PhoneInput({
         })
       });
       
-      console.log("API Response Status:", response.status);
-      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Error response:", errorText);
         try {
           const errorData = JSON.parse(errorText);
           throw new Error(errorData.error || `Server error: ${response.status}`);
@@ -162,19 +157,15 @@ export function PhoneInput({
       }
       
       const data = await response.json();
-      console.log("API Response Data:", data);
       
       // More flexible success checking
       if (data.success === true || data.status === "success" || data.call_id) {
-        console.log("Call initiated successfully, ID:", data.call_id);
         setCallId(data.call_id || "unknown");
         setSubmitted(true);
       } else {
-        console.error("API returned success=false:", data);
         setError(data.error || "Failed to initiate call. Please try again.");
       }
     } catch (err) {
-      console.error("Full error details:", err);
       setError(err instanceof Error ? err.message : "An error occurred while connecting to our service. Please try again later.");
     } finally {
       setLoading(false);
@@ -235,7 +226,7 @@ export function PhoneInput({
           </div>
             {callId && callId !== "unknown" && (
             <div className="text-xs text-gray-500">
-            Call ID: "You'll receive a call from our AI assistant shortly."
+            "You'll receive a call from our AI assistant shortly."
             </div>
           )}
           <Button
