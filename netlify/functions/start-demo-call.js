@@ -75,6 +75,7 @@ exports.handler = async function(event, context) {
         phone_number: phoneNumber,
         pathway_id: pathwayId,
         reduce_latency: true
+        voice: "june"
       })
     });
     
@@ -98,7 +99,39 @@ exports.handler = async function(event, context) {
         })
       };
     }
-    
+    // Add these debug log statements to your start-demo-call.js file
+// in the GHL integration section (around line 87-145)
+
+// Debug GHL API key
+console.log("GHL API Key present:", !!ghlApiKey);
+console.log("GHL API Key starts with:", ghlApiKey ? ghlApiKey.substring(0, 4) + "..." : "N/A");
+
+// Before GHL lookup
+console.log("About to make GHL lookup request with formatted phone:", formattedPhone);
+
+// After GHL search response
+console.log("GHL search raw response:", await searchResponse.clone().text());
+
+// Debug contact data before sending
+console.log("About to send this data to GHL:", JSON.stringify(contactData, null, 2));
+
+// Add comprehensive error handling
+try {
+  // Your GHL API calls here
+} catch (error) {
+  console.error("Detailed GHL error:", {
+    message: error.message,
+    stack: error.stack,
+    response: error.response ? {
+      status: error.response.status,
+      statusText: error.response.statusText,
+      data: await error.response.text()
+    } : "No response data"
+  });
+}
+
+// After successful operation
+console.log("GHL operation completed successfully. Contact ID:", contactId);
     // If we have a GHL API key, create/update contact in Go High Level
     if (ghlApiKey && (blandData.success || blandData.call_id)) {
       try {
