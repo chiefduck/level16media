@@ -74,7 +74,8 @@ exports.handler = async function(event, context) {
       body: JSON.stringify({
         phone_number: phoneNumber,
         pathway_id: pathwayId,
-        reduce_latency: true
+        reduce_latency: true,
+        voice: "june"
       })
     });
     
