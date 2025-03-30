@@ -75,7 +75,7 @@ exports.handler = async function(event, context) {
         phone_number: phoneNumber,
         pathway_id: pathwayId,
         reduce_latency: true
-        voice: "june"
+        voice: "june",
       })
     });
     
