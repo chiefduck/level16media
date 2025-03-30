@@ -12,18 +12,25 @@ exports.handler = async (event) => {
     body: JSON.stringify({
       model: "gpt-3.5-turbo",
       messages: [
-        { role: "system", content: "You are an AI assistant for a digital marketing agency named Level 16 Media. Be helpful, friendly, and conversion-focused." },
+        {
+          role: "system",
+          content:
+            "You are an AI assistant for a digital marketing agency named Level 16 Media. Be helpful, friendly, and conversion-focused.",
+        },
         { role: "user", content: message },
       ],
     }),
   });
 
   const data = await response.json();
+  console.log("OpenAI API response:", data);
 
-  const reply = data.choices?.[0]?.message?.content || "Sorry, I didn't quite get that.";
+  const reply = data.choices?.[0]?.message?.content?.trim();
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ reply }),
+    body: JSON.stringify({
+      reply: reply || "Hmm, I didn't catch that — try rephrasing?",
+    }),
   };
 };

@@ -1,21 +1,19 @@
-// ChatPreview.tsx
-import React, { useState, useEffect } from 'react';
-import { MessageSquare, X, Minimize2, Bot } from 'lucide-react';
+// components/ChatPreview.tsx
+
+import React, { useState } from 'react';
 
 export function ChatPreview() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState([
-    { type: 'bot', text: "👋 Hi! I'm your AI assistant. How can I help you today?" },
+    { type: 'bot', text: "👋 Hi! I'm your AI assistant. Ask me anything about marketing, lead gen, or AI voice tools." },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const handleSendMessage = async () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
-    const newMessages = [...messages, { type: 'user', text: input }];
-    setMessages(newMessages);
+    const userMessage = { type: 'user', text: input };
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
 
@@ -27,11 +25,14 @@ export function ChatPreview() {
       });
 
       const data = await res.json();
-      setMessages([...newMessages, { type: 'bot', text: data.reply }]);
+      const reply = data.reply || "Hmm, I didn’t quite catch that.";
+
+      setMessages((prev) => [...prev, { type: 'bot', text: reply }]);
     } catch (err) {
-      setMessages([
-        ...newMessages,
-        { type: 'bot', text: "Sorry, something went wrong. Try again later." },
+      console.error('AI chat error:', err);
+      setMessages((prev) => [
+        ...prev,
+        { type: 'bot', text: 'Uh oh, something went wrong. Please try again!' },
       ]);
     } finally {
       setIsTyping(false);
@@ -39,100 +40,60 @@ export function ChatPreview() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSendMessage();
-    }
+    if (e.key === 'Enter') handleSend();
   };
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-8 right-8 bg-indigo-600 text-white p-4 rounded-full shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all duration-300 hover:scale-110 z-40"
-      >
-        <MessageSquare className="h-6 w-6" />
-      </button>
-    );
-  }
-
   return (
-    <div
-      className={`fixed bottom-8 right-8 w-96 bg-white rounded-2xl shadow-2xl border border-indigo-100 overflow-hidden z-40 transition-all duration-300 ${
-        isMinimized ? 'h-16' : 'h-[500px]'
-      }`}
-    >
-      <div className="bg-indigo-600 p-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-white">
-          <Bot className="h-5 w-5" />
-          <span className="font-medium">AI Assistant</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="text-white/80 hover:text-white transition-colors"
+    <div className="mt-12 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white max-w-3xl mx-auto shadow-2xl">
+      <h2 className="text-2xl font-bold mb-6">Try Our Chatbot Demo</h2>
+
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 space-y-4 max-h-[400px] overflow-y-auto">
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
           >
-            <Minimize2 className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="text-white/80 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-
-      {!isMinimized && (
-        <>
-          <div className="h-[380px] overflow-y-auto p-4 space-y-4">
-            {messages.map((message, idx) => (
-              <div
-                key={idx}
-                className={`flex ${
-                  message.type === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
-                  className={`max-w-[80%] p-3 rounded-2xl ${
-                    message.type === 'user'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {message.text}
-                </div>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] p-3 rounded-2xl bg-gray-100 text-gray-800 animate-pulse">
-                  Typing...
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 border-t">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Type your message..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-300"
-              />
-              <button
-                onClick={handleSendMessage}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                Send
-              </button>
+            <div
+              className={`max-w-[75%] p-3 rounded-2xl ${
+                msg.type === 'user'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white/20 text-white'
+              }`}
+            >
+              {msg.text}
             </div>
           </div>
-        </>
-      )}
+        ))}
+
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="max-w-[75%] p-3 rounded-2xl bg-white/20 text-white animate-pulse">
+              Typing...
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 flex gap-2">
+        <input
+          type="text"
+          placeholder="Type your question..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="flex-1 px-4 py-2 rounded-lg border border-white/30 bg-white/10 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white"
+        />
+        <button
+          onClick={handleSend}
+          className="px-6 py-2 bg-white text-indigo-700 font-bold rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          Send
+        </button>
+      </div>
+
+      <p className="mt-3 text-sm text-white/70 text-center">
+        Ask the bot anything — it’s powered by real AI 💬
+      </p>
     </div>
   );
 }

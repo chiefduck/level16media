@@ -2,6 +2,7 @@ import React from 'react';
 import { MessageSquare, Bot, Zap, BarChart3 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { CostCalculator } from '../components/CostCalculator';
+import { ChatPreview } from '../components/ChatPreview'; // Make sure path matches your file structure
 
 const features = [
   {
@@ -30,6 +31,7 @@ export function ChatbotPage() {
   return (
     <div className="py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Page Heading */}
         <div className="text-center">
           <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl md:text-6xl">
             <span className="block">AI Chatbot</span>
@@ -38,34 +40,15 @@ export function ChatbotPage() {
           <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
             Convert more website visitors with AI chat that understands customer needs and books meetings automatically. Available 24/7 to engage and qualify leads.
           </p>
-          
-          {/* Interactive Demo Preview */}
-          <div className="mt-12 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white max-w-3xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6">Try Our Chatbot Demo</h2>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-6 w-6" />
-                  <p className="text-lg">Hi! How can I help you today?</p>
-                </div>
-                <div className="h-12 bg-white/20 rounded-lg animate-pulse"></div>
-                <p className="text-sm opacity-80">Start typing to interact with our AI</p>
-              </div>
-              <Button 
-                variant="secondary" 
-                size="lg" 
-                className="mt-6 w-full"
-              >
-                Start Chat Demo
-              </Button>
-            </div>
-          </div>
         </div>
 
-        {/* Features Grid */}
+        {/* 🔥 The AI Chat Demo */}
+        <ChatPreview />
+
+        {/* Features Section */}
         <div className="mt-24 grid gap-8 md:grid-cols-2">
           {features.map((feature) => (
-            <div 
+            <div
               key={feature.title}
               className="relative bg-white p-8 rounded-2xl shadow-lg border border-indigo-50 card-hover"
             >
@@ -89,10 +72,10 @@ export function ChatbotPage() {
 
         {/* Call-to-Action */}
         <div className="mt-24 text-center">
-          <Button 
-            variant="primary" 
-            size="lg" 
-            icon 
+          <Button
+            variant="primary"
+            size="lg"
+            icon
             className="shadow-xl shadow-indigo-600/20"
           >
             Book Your Free Demo
