@@ -233,9 +233,9 @@ export function PhoneInput({
           <div className="text-green-600">
             Calling {phone} now...
           </div>
-          {callId && callId !== "unknown" && (
+            {callId && callId !== "unknown" && (
             <div className="text-xs text-gray-500">
-              Call ID: {callId}
+            Call ID: "You'll receive a call from our AI assistant shortly."
             </div>
           )}
           <Button
