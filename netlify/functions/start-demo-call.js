@@ -75,7 +75,6 @@ exports.handler = async function(event, context) {
         phone_number: phoneNumber,
         pathway_id: pathwayId,
         reduce_latency: true
-        voice: "june",
       })
     });
     
@@ -100,90 +99,66 @@ exports.handler = async function(event, context) {
       };
     }
     
-   // If we have a GHL API key, create/update contact in Go High Level
-if (ghlApiKey && (blandData.success || blandData.call_id)) {
-    try {
-      console.log("Starting GHL integration");
-      
-      // Debug GHL API key - ADD THIS
-      console.log("GHL API Key present:", !!ghlApiKey);
-      console.log("GHL API Key starts with:", ghlApiKey ? ghlApiKey.substring(0, 4) + "..." : "N/A");
-      
-      // Format phone number for GHL (add +1 prefix for US numbers)
-      const formattedPhone = `+1${phoneNumber}`;
-      
-      // Current timestamp for tracking
-      const timestamp = new Date().toISOString();
-      
-      // First check if contact already exists in GHL
-      console.log("Looking up GHL contact with phone:", formattedPhone);
-      
-      // ADD THIS before the fetch call
-      console.log("About to make GHL lookup request with URL:", `https://rest.gohighlevel.com/v1/contacts/lookup?phone=${encodeURIComponent(formattedPhone)}`);
-      
-      const searchResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/lookup?phone=${encodeURIComponent(formattedPhone)}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${ghlApiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      // Log raw GHL search response for debugging
-      console.log("GHL search response status:", searchResponse.status);
-      
-      // ADD THIS to see the raw response body
-      const searchResponseClone = searchResponse.clone();
-      const searchResponseText = await searchResponseClone.text();
-      console.log("GHL search raw response:", searchResponseText);
-      
-      if (!searchResponse.ok) {
-        const errorText = await searchResponse.text();
-        console.error("GHL search error:", errorText);
-        throw new Error(`GHL search failed: ${searchResponse.status}`);
-      }
-      
-      // MODIFY THIS to parse from the cloned response text
-      let searchData;
+    // If we have a GHL API key, create/update contact in Go High Level
+    if (ghlApiKey && (blandData.success || blandData.call_id)) {
       try {
-        searchData = JSON.parse(searchResponseText);
-      } catch (e) {
-        console.error("Failed to parse GHL search response as JSON:", e);
-        console.log("Raw response that failed to parse:", searchResponseText);
-        throw new Error("Failed to parse GHL response");
-      }
-      
-      console.log("GHL search response:", JSON.stringify(searchData));
-      
-      let contactId = searchData?.contacts?.[0]?.id;
-      let isNewContact = !contactId;
-      
-      console.log("Contact found in GHL:", !isNewContact, "Contact ID:", contactId);
-      
-      // Contact data to send to GHL
-      const contactData = {
-        phone: formattedPhone,
-        name: name,
-        email: email,
-        customField: {
-          "last_demo_call": timestamp,
-          "demo_call_id": blandData.call_id || ''
-        },
-        tags: ["Demo Call", "Bland AI Demo"],
-        source: "Website Demo"
-      };
-      
-      // ADD THIS
-      console.log("About to send this data to GHL:", JSON.stringify(contactData, null, 2));
-      
-      let ghlResponse;
-      
-      if (isNewContact) {
-        // Create new contact
-        console.log("Creating new GHL contact");
+        console.log("Starting GHL integration");
         
-        // ADD THIS - wrap in try/catch for better error details
-        try {
+        // Format phone number for GHL (add +1 prefix for US numbers)
+        const formattedPhone = `+1${phoneNumber}`;
+        
+        // Current timestamp for tracking
+        const timestamp = new Date().toISOString();
+        
+        // First check if contact already exists in GHL
+        console.log("Looking up GHL contact with phone:", formattedPhone);
+        
+        const searchResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/lookup?phone=${encodeURIComponent(formattedPhone)}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${ghlApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        // Log raw GHL search response for debugging
+        console.log("GHL search response status:", searchResponse.status);
+        
+        if (!searchResponse.ok) {
+          const errorText = await searchResponse.text();
+          console.error("GHL search error:", errorText);
+          throw new Error(`GHL search failed: ${searchResponse.status}`);
+        }
+        
+        const searchData = await searchResponse.json();
+        console.log("GHL search response:", JSON.stringify(searchData));
+        
+        let contactId = searchData?.contacts?.[0]?.id;
+        let isNewContact = !contactId;
+        
+        console.log("Contact found in GHL:", !isNewContact, "Contact ID:", contactId);
+        
+        // Contact data to send to GHL
+        const contactData = {
+          phone: formattedPhone,
+          name: name,
+          email: email,
+          customField: {
+            "last_demo_call": timestamp,
+            "demo_call_id": blandData.call_id || ''
+          },
+          tags: ["Demo Call", "Bland AI Demo"],
+          source: "Website Demo"
+        };
+        
+        console.log("Preparing to create/update GHL contact:", JSON.stringify(contactData));
+        
+        let ghlResponse;
+        
+        if (isNewContact) {
+          // Create new contact
+          console.log("Creating new GHL contact");
+          
           ghlResponse = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
             method: 'POST',
             headers: {
@@ -192,16 +167,10 @@ if (ghlApiKey && (blandData.success || blandData.call_id)) {
             },
             body: JSON.stringify(contactData)
           });
-        } catch (fetchError) {
-          console.error("Network error during GHL contact creation:", fetchError);
-          throw fetchError;
-        }
-      } else {
-        // Update existing contact
-        console.log("Updating existing GHL contact:", contactId);
-        
-        // ADD THIS - wrap in try/catch for better error details
-        try {
+        } else {
+          // Update existing contact
+          console.log("Updating existing GHL contact:", contactId);
+          
           ghlResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
             method: 'PUT',
             headers: {
@@ -210,52 +179,62 @@ if (ghlApiKey && (blandData.success || blandData.call_id)) {
             },
             body: JSON.stringify(contactData)
           });
-        } catch (fetchError) {
-          console.error("Network error during GHL contact update:", fetchError);
-          throw fetchError;
         }
+        
+        // Log raw GHL response
+        console.log("GHL create/update response status:", ghlResponse.status);
+        
+        if (!ghlResponse.ok) {
+          const errorText = await ghlResponse.text();
+          console.error("GHL create/update error:", errorText);
+          throw new Error(`GHL operation failed: ${ghlResponse.status}`);
+        }
+        
+        const ghlData = await ghlResponse.json();
+        console.log("GHL create/update response:", JSON.stringify(ghlData));
+        
+        // Add a note about the demo call
+        if (contactId || (!isNewContact && ghlResponse.ok)) {
+          // If we just created the contact, get the new ID
+          if (isNewContact && ghlResponse.ok) {
+            const newContactData = ghlData;
+            contactId = newContactData?.contact?.id || newContactData?.id;
+            console.log("New contact created with ID:", contactId);
+          }
+          
+          if (contactId) {
+            // Add a note to the contact
+            console.log("Adding note to GHL contact:", contactId);
+            
+            const noteResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}/notes`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${ghlApiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                body: `Demo call initiated on ${new Date().toLocaleString()}. Call ID: ${blandData.call_id || 'N/A'}`
+              })
+            });
+            
+            console.log("GHL note response status:", noteResponse.status);
+            
+            if (!noteResponse.ok) {
+              const errorText = await noteResponse.text();
+              console.error("GHL note error:", errorText);
+            } else {
+              const noteData = await noteResponse.json();
+              console.log("GHL note response:", JSON.stringify(noteData));
+            }
+          }
+        }
+        
+        console.log("GHL integration completed successfully");
+      } catch (ghlError) {
+        // Log GHL error but don't fail the overall request
+        console.error("Error with GHL integration:", ghlError);
       }
-      
-      // Log raw GHL response
-      console.log("GHL create/update response status:", ghlResponse.status);
-      
-      // ADD THIS to see the raw response body
-      const ghlResponseClone = ghlResponse.clone();
-      const ghlResponseText = await ghlResponseClone.text();
-      console.log("GHL create/update raw response:", ghlResponseText);
-      
-      if (!ghlResponse.ok) {
-        const errorText = await ghlResponse.text();
-        console.error("GHL create/update error:", errorText);
-        throw new Error(`GHL operation failed: ${ghlResponse.status}`);
-      }
-      
-      // MODIFY THIS to parse from the cloned response text
-      let ghlData;
-      try {
-        ghlData = JSON.parse(ghlResponseText);
-      } catch (e) {
-        console.error("Failed to parse GHL create/update response as JSON:", e);
-        console.log("Raw response that failed to parse:", ghlResponseText);
-        throw new Error("Failed to parse GHL response");
-      }
-      
-      console.log("GHL create/update response:", JSON.stringify(ghlData));
-      
-      // ADD THIS
-      console.log("GHL operation completed successfully. Contact ID:", contactId || "unknown");
-      
-      // Rest of your code...
-    } catch (ghlError) {
-      // Log GHL error but don't fail the overall request
-      console.error("Error with GHL integration:", ghlError);
-      // ADD THIS for more detailed error logging
-      console.error("Error details:", {
-        message: ghlError.message,
-        stack: ghlError.stack
-      });
     }
-  }
 
     // Add tags to the response for successful debugging
     const responseData = {
