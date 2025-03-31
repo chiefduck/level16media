@@ -61,17 +61,22 @@ export function ChatPreview() {
 
   const handleAssistant = async (msg: string) => {
     try {
-      // Step 1: Start assistant run
-      const start = await fetch('/.netlify/functions/start-assistant', {
+      const startRes = await fetch('/.netlify/functions/start-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, thread_id: threadId }),
       });
   
-      const { thread_id, run_id } = await start.json();
+      const result = await startRes.json();
   
-      // ✅ Always store threadId immediately
-      if (thread_id) setThreadId(thread_id);
+      const thread_id = result.thread_id;
+      const run_id = result.run_id;
+  
+      console.log("🧵 Thread ID:", thread_id);
+      console.log("🏃‍♂️ Run ID:", run_id);
+  
+      if (thread_id) setThreadId(thread_id); // ✅ Make sure to store it immediately
+  
   
       // Step 2: Poll for result
       let status = 'queued';
