@@ -31,14 +31,15 @@ export function ChatPreview() {
 
   const handleSend = async () => {
     if (!input.trim()) return;
-
+  
     const userMessage = { type: 'user', text: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
-
+  
     try {
-      const res = await fetch('/.netlify/functions/chat-assistant', {
+      // Step 1: Start the Assistant run
+      const startRes = await fetch('/.netlify/functions/start-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -46,14 +47,37 @@ export function ChatPreview() {
           thread_id: threadId,
         }),
       });
-
-      const data = await res.json();
-
-      if (data.thread_id && !threadId) {
-        setThreadId(data.thread_id);
+  
+      const { thread_id, run_id } = await startRes.json();
+      if (thread_id && !threadId) setThreadId(thread_id);
+  
+      // Step 2: Poll for result from /check-assistant
+      let status = 'queued';
+      let reply = '';
+      let retries = 0;
+  
+      while (status !== 'completed' && retries < 12) {
+        await new Promise((res) => setTimeout(res, 1000));
+        retries++;
+  
+        const checkRes = await fetch('/.netlify/functions/check-assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thread_id, run_id }),
+        });
+  
+        const data = await checkRes.json();
+        status = data.status;
+  
+        if (status === 'completed') {
+          reply = data.reply;
+        }
       }
-
-      const reply = data.reply || "Hmm, I didn’t quite catch that.";
+  
+      if (!reply) {
+        reply = '⚠️ Sorry, that took too long — try again.';
+      }
+  
       setMessages((prev) => [...prev, { type: 'bot', text: reply }]);
     } catch (err) {
       console.error('Assistant error:', err);
@@ -64,7 +88,7 @@ export function ChatPreview() {
     } finally {
       setIsTyping(false);
     }
-  };
+  };  
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSend();
