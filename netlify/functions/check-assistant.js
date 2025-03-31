@@ -44,79 +44,78 @@ exports.handler = async (event) => {
         console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
 
         const results = await Promise.all(
-            toolCalls.map(async (tool) => {
-              const fnName = tool.function.name;
-              const args = JSON.parse(tool.function.arguments || "{}");
-          
-              console.log("🔧 Tool called:", fnName);
-              console.log("📦 Tool args:", args);
-          
-              if (fnName === "create_lead") {
-                const res = await fetch(`${process.env.URL}/.netlify/functions/create-lead`, {
+          toolCalls.map(async (tool) => {
+            const fnName = tool.function.name;
+            const args = JSON.parse(tool.function.arguments || "{}");
+
+            console.log("🔧 Tool called:", fnName);
+            console.log("📦 Tool args:", args);
+
+            if (fnName === "create_lead") {
+              const res = await fetch(`${process.env.URL}/.netlify/functions/create-lead`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: args.name,
+                  phone: args.phone,
+                  email: args.email,
+                }),
+              });
+
+              const data = await res.json();
+              return {
+                tool_call_id: tool.id,
+                output: data?.message || "Lead created.",
+              };
+            }
+
+            if (fnName === "initiate_demo_call") {
+              try {
+                let cleanPhone = args.phone.replace(/\D/g, "");
+                if (!/^\d{10}$/.test(cleanPhone)) {
+                  throw new Error(`Phone number must be exactly 10 digits. Got: ${args.phone}`);
+                }
+
+                const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     name: args.name,
-                    phone: args.phone,
-                    email: args.email,
+                    phone: cleanPhone,
+                    email: args.email || "",
+                    pathway_id: args.pathway_id || "",
+                    source: "AI Chatbot",
                   }),
                 });
-          
-                const data = await res.json();
+
+                const blandData = await blandRes.json();
+                console.log("📞 Bland response:", blandData);
+
+                if (!blandRes.ok) {
+                  throw new Error(`Bland call failed: ${JSON.stringify(blandData)}`);
+                }
+
                 return {
                   tool_call_id: tool.id,
-                  output: data?.message || "Lead created.",
+                  output: `Call initiated successfully: ${blandData.call_id || "no ID"}`,
+                };
+              } catch (err) {
+                console.error("❌ Error in initiate_demo_call:", err);
+                return {
+                  tool_call_id: tool.id,
+                  output: `Error starting call: ${err.message}`,
                 };
               }
-          
-              if (fnName === "initiate_demo_call") {
-                try {
-                  let cleanPhone = args.phone.replace(/\D/g, "");
-          
-                  if (!/^\d{10}$/.test(cleanPhone)) {
-                    throw new Error(`Phone number is required and must be exactly 10 digits. Got: ${args.phone}`);
-                  }
-          
-                  const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      name: args.name,
-                      phone: cleanPhone,
-                      email: args.email || "",
-                      pathway_id: args.pathway_id || "",
-                      source: "AI Chatbot",
-                    }),
-                  });
-          
-                  const blandData = await blandRes.json();
-                  console.log("📞 Bland response:", blandData);
-          
-                  if (!blandRes.ok) {
-                    throw new Error(`Bland call failed: ${JSON.stringify(blandData)}`);
-                  }
-          
-                  return {
-                    tool_call_id: tool.id,
-                    output: `Call initiated successfully: ${blandData.call_id || "no ID"}`,
-                  };
-                } catch (err) {
-                  console.error("❌ Error in initiate_demo_call:", err);
-                  return {
-                    tool_call_id: tool.id,
-                    output: `Error starting call: ${err.message}`,
-                  };
-                }
-              }
-          
-              // fallback for unknown tools
-              return {
-                tool_call_id: tool.id,
-                output: `Unknown tool: ${fnName}`,
-              };
-            }) // closes map function
-          ); // closes await Promise.all
-          
+            }
+
+            // fallback
+            return {
+              tool_call_id: tool.id,
+              output: `Unknown tool: ${fnName}`,
+            };
+          })
+        );
+
         // Submit the tool outputs back to OpenAI
         await fetch(
           `https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}/submit_tool_outputs`,
@@ -136,7 +135,6 @@ exports.handler = async (event) => {
       }
 
       if (status === "completed") {
-        // Try to fetch the assistant's most recent message manually
         const msgRes = await fetch(
           `https://api.openai.com/v1/threads/${thread_id}/messages`,
           {
@@ -147,29 +145,25 @@ exports.handler = async (event) => {
             },
           }
         );
-      
-        const msgData = await msgRes.json();
-       // Sort messages by creation time to ensure proper sequence
-const sortedMessages = msgData.data?.sort((a, b) => a.created_at - b.created_at);
 
-// Find the most recent assistant reply *after* a tool_use
-let lastMsg = null;
-for (let i = sortedMessages.length - 1; i >= 0; i--) {
-  const m = sortedMessages[i];
-  if (m.role === "assistant") {
-    lastMsg = m;
-    break;
-  }
-}
-      
+        const msgData = await msgRes.json();
+        console.log("📬 Raw messages from OpenAI:", JSON.stringify(msgData, null, 2));
+
+        const sortedMessages = msgData.data?.sort((a, b) => a.created_at - b.created_at);
+        let lastMsg = sortedMessages?.reverse().find((m) => m.role === "assistant");
+
         console.log("🧠 Assistant lastMsg object:", JSON.stringify(lastMsg, null, 2));
-      
-        // Extract clean message text or fallback
-        reply = lastMsg?.content?.[0]?.text?.value || "⚠️ No assistant reply.";
+
+        reply =
+          lastMsg?.content?.[0]?.text?.value ||
+          lastMsg?.content?.[0]?.text ||
+          lastMsg?.content?.[0]?.value ||
+          lastMsg?.content?.value ||
+          lastMsg?.content ||
+          "⚠️ No assistant reply.";
 
         break;
       }
-      
 
       await new Promise((r) => setTimeout(r, 1500));
     }
