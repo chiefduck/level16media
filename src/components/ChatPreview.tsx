@@ -1,176 +1,70 @@
+// components/ChatPreview.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 
 export function ChatPreview() {
   const [messages, setMessages] = useState([
-    {
-      type: 'bot',
-      text: "👋 Hi! I'm your AI assistant. Ask me anything about marketing, lead gen, or AI voice tools.",
-    },
+    { type: 'bot', text: "👋 Hi! I'm your AI assistant. Ask me anything about marketing, lead gen, or AI voice tools." },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [userName, setUserName] = useState('');
-  const [userPhone, setUserPhone] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  const [stage, setStage] = useState<'chat' | 'askName' | 'askPhone' | 'askEmail' | 'completed' | 'blocked'>('chat');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const forbiddenTopics = /(?:weather|color|joke|cat|dog|sky|space|movie|trivia|fun fact|who made you|openai|chatgpt)/i;
-
+  // Scroll to bottom when new messages appear
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
-  
 
-  const fakeEmailPattern = /(?:test|asdf|123|no|fake|none|stupid|example|na|dummy|trash)/i;
-  const burnerDomains = ['mailinator.com', 'tempmail.com', '10minutemail.com'];
+  // Load thread ID if it exists
+  useEffect(() => {
+    const saved = localStorage.getItem('thread_id');
+    if (saved) setThreadId(saved);
+  }, []);
 
-  const isFakeEmail = (email: string) => {
-    if (fakeEmailPattern.test(email)) return true;
-    return burnerDomains.some((domain) => email.toLowerCase().endsWith(`@${domain}`));
-  };
+  // Save thread ID for memory
+  useEffect(() => {
+    if (threadId) {
+      localStorage.setItem('thread_id', threadId);
+    }
+  }, [threadId]);
 
   const handleSend = async () => {
-    if (!input.trim() || stage === 'blocked') return;
-  
-    const cleanedInput = input.trim().toLowerCase();
-    const userMsg = { type: 'user', text: input };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!input.trim()) return;
+
+    const userMessage = { type: 'user', text: input };
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
-  
-    const userMessageCount = messages.filter((m) => m.type === 'user').length + 1;
-  
-    // 🧠 Handle name input
-    if (stage === 'askName') {
-      setUserName(cleanedInput);
-      setStage('askPhone');
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: `Awesome, ${cleanedInput}! What's the best phone number to reach you at?` },
-      ]);
-      return;
-    }
-  
-    // 📞 Handle phone input or skip
-    if (stage === 'askPhone') {
-      if (cleanedInput === 'no' || cleanedInput.includes('no thanks')) {
-        setStage('completed');
-        setMessages((prev) => [
-          ...prev,
-          { type: 'bot', text: "No worries — you're all set! Let's get this on your calendar 👇" },
-          {
-            type: 'bot',
-            text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
-          },
-        ]);
-        return;
-      }
-  
-      setUserPhone(cleanedInput);
-      setStage('askEmail');
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: "Got it! Want a quick confirmation sent to your email too?" },
-      ]);
-      return;
-    }
-  
-    // 📧 Handle email input or skip
-    if (stage === 'askEmail') {
-      if (cleanedInput === 'no' || cleanedInput.includes('no thanks')) {
-        setStage('completed');
-        setMessages((prev) => [
-          ...prev,
-          { type: 'bot', text: "No worries — you're all set! Here's your booking link 👇" },
-          {
-            type: 'bot',
-            text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
-          },
-        ]);
-        return;
-      }
-  
-      if (isFakeEmail(cleanedInput)) {
-        setStage('blocked');
-        setMessages((prev) => [
-          ...prev,
-          { type: 'bot', text: "🚫 That doesn't look like a real email. Let's pause here — I'm happy to continue when you're ready for results." },
-        ]);
-        return;
-      }
-  
-      setUserEmail(cleanedInput);
-      setStage('completed');
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: `Thanks, you're all set! Let's get this on your calendar 👇` },
-        {
-          type: 'bot',
-          text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
-        },
-      ]);
-      return;
-    }
-  
-    // Soft demo CTA after 2 messages
-    if (userMessageCount === 2 && stage === 'chat') {
-      setStage('askName');
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: "👀 Want to see how this AI could work in your business? I can schedule a free demo for you. What's your first name?" },
-      ]);
-      return;
-    }
-  
-    // Fallback CTA if unqualified
-    if (userMessageCount >= 5 && stage === 'chat') {
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: "You've reached the end of this demo — ready to see how this works for *your* business? Let's schedule a free call 👇" },
-        {
-          type: 'bot',
-          text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
-        },
-      ]);
-      return;
-    }
-  
-    // Off-topic filter
-    if (forbiddenTopics.test(cleanedInput)) {
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: "Let’s stay focused on your business goals. I can help with marketing, automation, and lead gen — ask me anything about that 👇" },
-      ]);
-      return;
-    }
-  
-    // AI response via Netlify function
     setIsTyping(true);
+
     try {
-      const res = await fetch('/.netlify/functions/chat', {
+      const res = await fetch('/.netlify/functions/chat-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: cleanedInput }),
+        body: JSON.stringify({
+          message: input,
+          thread_id: threadId,
+        }),
       });
+
       const data = await res.json();
+
+      if (data.thread_id && !threadId) {
+        setThreadId(data.thread_id);
+      }
+
       const reply = data.reply || "Hmm, I didn’t quite catch that.";
       setMessages((prev) => [...prev, { type: 'bot', text: reply }]);
     } catch (err) {
+      console.error('Assistant error:', err);
       setMessages((prev) => [
         ...prev,
-        { type: 'bot', text: 'Something went wrong. Try again later or book a call 👇' },
-        {
-          type: 'bot',
-          text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book a Call</a>`,
-        },
+        { type: 'bot', text: '⚠️ Something went wrong. Please try again later.' },
       ]);
     } finally {
       setIsTyping(false);
     }
   };
-  
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSend();
@@ -184,17 +78,16 @@ export function ChatPreview() {
         {messages.map((msg, idx) => (
           <div
             key={idx}
-            className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} fade-in`}
           >
             <div
-              className={`max-w-[75%] p-3 rounded-2xl animate-fade-in transition-all duration-300 ${
+              className={`max-w-[75%] p-3 rounded-2xl ${
                 msg.type === 'user'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-white/20 text-white'
               }`}
-            >
-              <span dangerouslySetInnerHTML={{ __html: msg.text }} />
-            </div>
+              dangerouslySetInnerHTML={{ __html: msg.text }}
+            />
           </div>
         ))}
         {isTyping && (
@@ -210,7 +103,7 @@ export function ChatPreview() {
       <div className="mt-6 flex gap-2">
         <input
           type="text"
-          placeholder="Type your message..."
+          placeholder="Type your question..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
