@@ -69,28 +69,37 @@ console.log("📨 message content:", runData?.last_response?.message?.content);
             }
 
             if (fnName === "initiate_demo_call") {
-              const res = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  name: args.name,
-                  phone_number: args.phone,
-                }),
-              });
-
-              const data = await res.json();
-              return {
-                tool_call_id: tool.id,
-                output: data?.message || "Call triggered.",
-              };
-            }
-
-            return {
-              tool_call_id: tool.id,
-              output: "Unknown tool.",
-            };
-          })
-        );
+                try {
+                  const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: args.name,
+                      phone: args.phone,
+                    }),
+                  });
+              
+                  const blandData = await blandRes.json();
+              
+                  console.log("📞 Bland response:", blandData);
+              
+                  if (!blandRes.ok) {
+                    throw new Error(`Bland call failed: ${JSON.stringify(blandData)}`);
+                  }
+              
+                  return {
+                    tool_call_id: tool.id,
+                    output: `Call initiated successfully: ${blandData.call_id || "no ID"}`,
+                  };
+                } catch (err) {
+                  console.error("❌ Error in initiate_demo_call:", err);
+                  return {
+                    tool_call_id: tool.id,
+                    output: `Error starting call: ${err.message}`,
+                  };
+                }
+              }
+              
 
         // Submit back to OpenAI
         await fetch(
