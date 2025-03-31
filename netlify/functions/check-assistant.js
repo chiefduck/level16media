@@ -31,6 +31,9 @@ exports.handler = async (event) => {
       console.log("🧪 RAW run response:", JSON.stringify(runData, null, 2));
       console.log("🔄 run status:", runData.status);
       console.log("📨 message content:", runData?.last_response?.message?.content);
+      console.log("🛠️ Required action type:", runData.required_action?.type);
+console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
+
 
       status = runData.status;
 
