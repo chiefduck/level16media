@@ -18,8 +18,11 @@ export function ChatPreview() {
   const forbiddenTopics = /(?:weather|color|joke|cat|dog|sky|space|movie|trivia|fun fact|who made you|openai|chatgpt)/i;
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
   }, [messages]);
+  
 
   const fakeEmailPattern = /(?:test|asdf|123|no|fake|none|stupid|example|na|dummy|trash)/i;
   const burnerDomains = ['mailinator.com', 'tempmail.com', '10minutemail.com'];
@@ -31,93 +34,101 @@ export function ChatPreview() {
 
   const handleSend = async () => {
     if (!input.trim() || stage === 'blocked') return;
-
-    const cleanedInput = input.trim();
-    const userMsg = { type: 'user', text: cleanedInput };
+  
+    const cleanedInput = input.trim().toLowerCase();
+    const userMsg = { type: 'user', text: input };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
-
+  
     const userMessageCount = messages.filter((m) => m.type === 'user').length + 1;
-
-    // 💬 Lead Capture Flow
+  
+    // 🧠 Handle name input
     if (stage === 'askName') {
       setUserName(cleanedInput);
       setStage('askPhone');
       setMessages((prev) => [
         ...prev,
-        {
-          type: 'bot',
-          text: `Awesome, ${cleanedInput}! What's the best phone number to reach you at?`,
-        },
+        { type: 'bot', text: `Awesome, ${cleanedInput}! What's the best phone number to reach you at?` },
       ]);
       return;
     }
-
+  
+    // 📞 Handle phone input or skip
     if (stage === 'askPhone') {
-      setUserPhone(cleanedInput);
-      setStage('askEmail');
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: 'bot',
-          text: "Got it! Want a quick confirmation sent to your email too?",
-        },
-      ]);
-      return;
-    }
-
-    if (stage === 'askEmail') {
-      if (isFakeEmail(cleanedInput)) {
-        setStage('blocked');
+      if (cleanedInput === 'no' || cleanedInput.includes('no thanks')) {
+        setStage('completed');
         setMessages((prev) => [
           ...prev,
+          { type: 'bot', text: "No worries — you're all set! Let's get this on your calendar 👇" },
           {
             type: 'bot',
-            text: "🚫 Hmm, that doesn’t look like a real email. Let’s pause here — I’m happy to continue when you’re ready for results.",
+            text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
           },
         ]);
         return;
       }
-
+  
+      setUserPhone(cleanedInput);
+      setStage('askEmail');
+      setMessages((prev) => [
+        ...prev,
+        { type: 'bot', text: "Got it! Want a quick confirmation sent to your email too?" },
+      ]);
+      return;
+    }
+  
+    // 📧 Handle email input or skip
+    if (stage === 'askEmail') {
+      if (cleanedInput === 'no' || cleanedInput.includes('no thanks')) {
+        setStage('completed');
+        setMessages((prev) => [
+          ...prev,
+          { type: 'bot', text: "No worries — you're all set! Here's your booking link 👇" },
+          {
+            type: 'bot',
+            text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
+          },
+        ]);
+        return;
+      }
+  
+      if (isFakeEmail(cleanedInput)) {
+        setStage('blocked');
+        setMessages((prev) => [
+          ...prev,
+          { type: 'bot', text: "🚫 That doesn't look like a real email. Let's pause here — I'm happy to continue when you're ready for results." },
+        ]);
+        return;
+      }
+  
       setUserEmail(cleanedInput);
       setStage('completed');
       setMessages((prev) => [
         ...prev,
-        {
-          type: 'bot',
-          text: `Thanks, you're all set! Let's get this on your calendar 👇`,
-        },
+        { type: 'bot', text: `Thanks, you're all set! Let's get this on your calendar 👇` },
         {
           type: 'bot',
           text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
         },
       ]);
-
-      // TODO: Push to GHL here with { userName, userPhone, userEmail }
       return;
     }
-
-    // Smart CTA after 2 legit messages
+  
+    // Soft demo CTA after 2 messages
     if (userMessageCount === 2 && stage === 'chat') {
+      setStage('askName');
       setMessages((prev) => [
         ...prev,
-        {
-          type: 'bot',
-          text: "👀 Want to see how this AI could work in your business? I can schedule a free demo for you. What's your first name?",
-        },
+        { type: 'bot', text: "👀 Want to see how this AI could work in your business? I can schedule a free demo for you. What's your first name?" },
       ]);
-      setStage('askName');
       return;
     }
-
-    // Fallback after 5 messages
+  
+    // Fallback CTA if unqualified
     if (userMessageCount >= 5 && stage === 'chat') {
       setMessages((prev) => [
         ...prev,
-        {
-          type: 'bot',
-          text: "You've reached the end of this demo — ready to see how this works for *your* business? Let's schedule a free call 👇",
-        },
+        { type: 'bot', text: "You've reached the end of this demo — ready to see how this works for *your* business? Let's schedule a free call 👇" },
         {
           type: 'bot',
           text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book Your Demo Now</a>`,
@@ -125,41 +136,31 @@ export function ChatPreview() {
       ]);
       return;
     }
-
+  
     // Off-topic filter
     if (forbiddenTopics.test(cleanedInput)) {
       setMessages((prev) => [
         ...prev,
-        {
-          type: 'bot',
-          text: "Let’s stay focused on your business goals. I can help with marketing, automation, and lead gen — ask me anything about that 👇",
-        },
+        { type: 'bot', text: "Let’s stay focused on your business goals. I can help with marketing, automation, and lead gen — ask me anything about that 👇" },
       ]);
       return;
     }
-
-    // 💬 Normal AI Response
+  
+    // AI response via Netlify function
     setIsTyping(true);
-
     try {
       const res = await fetch('/.netlify/functions/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: cleanedInput }),
       });
-
       const data = await res.json();
       const reply = data.reply || "Hmm, I didn’t quite catch that.";
-
       setMessages((prev) => [...prev, { type: 'bot', text: reply }]);
     } catch (err) {
-      console.error('AI chat error:', err);
       setMessages((prev) => [
         ...prev,
-        {
-          type: 'bot',
-          text: 'Something went wrong. Try again later or book a call 👇',
-        },
+        { type: 'bot', text: 'Something went wrong. Try again later or book a call 👇' },
         {
           type: 'bot',
           text: `<a href="https://api.navizio.com/widget/booking/CfTVykAt8qTshxQ42FM4" target="_blank" rel="noopener noreferrer" class="underline font-semibold">📅 Book a Call</a>`,
@@ -169,6 +170,7 @@ export function ChatPreview() {
       setIsTyping(false);
     }
   };
+  
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSend();
