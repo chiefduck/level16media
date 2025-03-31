@@ -30,8 +30,7 @@ exports.handler = async (event) => {
       const runData = await runRes.json();
       console.log("🧪 RAW run response:", JSON.stringify(runData, null, 2));
       console.log("🔄 run status:", runData.status);
-console.log("📨 message content:", runData?.last_response?.message?.content);
-
+      console.log("📨 message content:", runData?.last_response?.message?.content);
 
       status = runData.status;
 
@@ -42,6 +41,7 @@ console.log("📨 message content:", runData?.last_response?.message?.content);
       ) {
         const toolCalls = runData.required_action.submit_tool_outputs.tool_calls;
 
+        // Process each tool call concurrently
         const results = await Promise.all(
           toolCalls.map(async (tool) => {
             const fnName = tool.function.name;
@@ -51,15 +51,18 @@ console.log("📨 message content:", runData?.last_response?.message?.content);
             console.log("📦 Tool args:", args);
 
             if (fnName === "create_lead") {
-              const res = await fetch(`${process.env.URL}/.netlify/functions/create-lead`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  name: args.name,
-                  phone: args.phone,
-                  email: args.email,
-                }),
-              });
+              const res = await fetch(
+                `${process.env.URL}/.netlify/functions/create-lead`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    name: args.name,
+                    phone: args.phone,
+                    email: args.email,
+                  }),
+                }
+              );
 
               const data = await res.json();
               return {
@@ -69,39 +72,49 @@ console.log("📨 message content:", runData?.last_response?.message?.content);
             }
 
             if (fnName === "initiate_demo_call") {
-                try {
-                  const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
+              try {
+                const blandRes = await fetch(
+                  `${process.env.URL}/.netlify/functions/initiate-call`,
+                  {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       name: args.name,
                       phone: args.phone,
                     }),
-                  });
-              
-                  const blandData = await blandRes.json();
-              
-                  console.log("📞 Bland response:", blandData);
-              
-                  if (!blandRes.ok) {
-                    throw new Error(`Bland call failed: ${JSON.stringify(blandData)}`);
                   }
-              
-                  return {
-                    tool_call_id: tool.id,
-                    output: `Call initiated successfully: ${blandData.call_id || "no ID"}`,
-                  };
-                } catch (err) {
-                  console.error("❌ Error in initiate_demo_call:", err);
-                  return {
-                    tool_call_id: tool.id,
-                    output: `Error starting call: ${err.message}`,
-                  };
-                }
-              }
-              
+                );
 
-        // Submit back to OpenAI
+                const blandData = await blandRes.json();
+
+                console.log("📞 Bland response:", blandData);
+
+                if (!blandRes.ok) {
+                  throw new Error(`Bland call failed: ${JSON.stringify(blandData)}`);
+                }
+
+                return {
+                  tool_call_id: tool.id,
+                  output: `Call initiated successfully: ${blandData.call_id || "no ID"}`,
+                };
+              } catch (err) {
+                console.error("❌ Error in initiate_demo_call:", err);
+                return {
+                  tool_call_id: tool.id,
+                  output: `Error starting call: ${err.message}`,
+                };
+              }
+            }
+
+            // If no matching tool is found, you might want to return a default response
+            return {
+              tool_call_id: tool.id,
+              output: "No matching tool found.",
+            };
+          })
+        );
+
+        // Submit the tool outputs back to OpenAI
         await fetch(
           `https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}/submit_tool_outputs`,
           {
@@ -117,6 +130,8 @@ console.log("📨 message content:", runData?.last_response?.message?.content);
 
         // Wait before checking again
         await new Promise((r) => setTimeout(r, 1500));
+
+        // Continue the outer loop to check the run status again
         continue;
       }
 
@@ -145,3 +160,4 @@ console.log("📨 message content:", runData?.last_response?.message?.content);
     };
   }
 };
+
