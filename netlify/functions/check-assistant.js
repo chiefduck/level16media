@@ -5,30 +5,28 @@ exports.handler = async (event) => {
     const { thread_id, run_id } = JSON.parse(event.body);
 
     if (!thread_id || !run_id) {
-      console.log("❌ Missing thread or run ID");
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing thread or run ID" }),
+        body: JSON.stringify({ error: "Missing thread_id or run_id" }),
       };
     }
 
-    // Check run status
-    const runCheck = await fetch(
-      `https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-          "OpenAI-Beta": "assistants=v2",
-        },
-      }
-    );
+    const runRes = await fetch(`https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v2",
+      },
+    });
 
-    const runData = await runCheck.json();
-    console.log("🧠 Assistant run status:", runData.status);
+    const runData = await runRes.json();
+    console.log("🧪 RAW run response:", JSON.stringify(runData, null, 2));
+
+    const status = runData.status;
 
     // 🛠 Handle tool call if requested
-    if (runData.status === "requires_action" && runData.required_action?.type === "submit_tool_outputs") {
+    if (status === "requires_action" && runData.required_action?.type === "submit_tool_outputs") {
       const toolCalls = runData.required_action.submit_tool_outputs.tool_calls;
 
       const results = await Promise.all(toolCalls.map(async (tool) => {
@@ -38,6 +36,7 @@ exports.handler = async (event) => {
         console.log("🔧 Tool called:", fnName);
         console.log("📦 Tool args:", args);
 
+        // Handle create_lead
         if (fnName === "create_lead") {
           const ghlRes = await fetch(`${process.env.URL}/.netlify/functions/create-lead`, {
             method: "POST",
@@ -56,6 +55,26 @@ exports.handler = async (event) => {
           };
         }
 
+        // Handle initiate_demo_call
+        if (fnName === "initiate_demo_call") {
+          const callRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              phone_number: args.phone,
+              name: args.name,
+              email: args.email || "",
+              pathway_id: process.env.BLAND_PATHWAY_ID || "",
+            }),
+          });
+
+          const callData = await callRes.json();
+          return {
+            tool_call_id: tool.id,
+            output: `Call initiated with ID: ${callData.call_id}`,
+          };
+        }
+
         // Default fallback
         return {
           tool_call_id: tool.id,
@@ -63,7 +82,13 @@ exports.handler = async (event) => {
         };
       }));
 
-      // Submit tool outputs back to OpenAI
+      // 🧠 Grab name for personalization
+      const firstArgs = toolCalls?.[0]?.function?.arguments
+        ? JSON.parse(toolCalls[0].function.arguments)
+        : {};
+      const leadName = firstArgs.name?.split(" ")[0] || "there";
+
+      // Submit outputs back to OpenAI
       await fetch(`https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}/submit_tool_outputs`, {
         method: "POST",
         headers: {
@@ -74,47 +99,36 @@ exports.handler = async (event) => {
         body: JSON.stringify({ tool_outputs: results }),
       });
 
+      // Custom response after tool run
       return {
         statusCode: 200,
-        body: JSON.stringify({ status: "submitted_tool_outputs" }),
+        body: JSON.stringify({
+          status: "completed",
+          reply: `Thanks, ${leadName}! You're all set. Let me know if you'd like a live AI Voice Demo or want to book a strategy call.`,
+        }),
       };
     }
 
-    // Run still processing
-    if (runData.status !== "completed") {
+    // Return default status if not complete
+    if (status === "completed") {
       return {
         statusCode: 200,
-        body: JSON.stringify({ status: runData.status }),
+        body: JSON.stringify({
+          status: "completed",
+          reply: runData.last_response?.message?.content || "✅ Done.",
+        }),
       };
     }
-
-    // Run completed – get assistant message
-    const msgRes = await fetch(
-      `https://api.openai.com/v1/threads/${thread_id}/messages`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-          "OpenAI-Beta": "assistants=v2",
-        },
-      }
-    );
-
-    const msgData = await msgRes.json();
-    const lastMsg = msgData.data.reverse().find((m) => m.role === "assistant");
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        status: "completed",
-        reply: lastMsg?.content?.[0]?.text?.value || "No reply.",
-      }),
+      body: JSON.stringify({ status }),
     };
   } catch (err) {
-    console.error("❌ Assistant check error:", err);
+    console.error("❌ Assistant error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Error checking assistant run" }),
+      body: JSON.stringify({ error: "Assistant check failed." }),
     };
   }
 };
