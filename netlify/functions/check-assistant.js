@@ -72,9 +72,11 @@ exports.handler = async (event) => {
             if (fnName === "initiate_demo_call") {
               try {
                 let cleanPhone = args.phone.replace(/\D/g, "");
-                if (!/^\d{10}$/.test(cleanPhone)) {
-                  throw new Error(`Phone number must be exactly 10 digits. Got: ${args.phone}`);
-                }
+
+if (!/^\d{10}$/.test(cleanPhone)) {
+  throw new Error(`Phone number must be exactly 10 digits. Got: ${cleanPhone}`);
+}
+
 
                 const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
                   method: "POST",
