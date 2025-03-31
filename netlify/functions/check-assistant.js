@@ -79,7 +79,7 @@ exports.handler = async (event) => {
                     phone: args.phone,
                     email: args.email || "",
                     pathway_id: args.pathway_id || "",
-                    source: "AI Chatbot",
+                    source: "AI Chatbot"
                   }),
                 });
 
@@ -110,6 +110,7 @@ exports.handler = async (event) => {
           })
         );
 
+        // Submit the tool outputs back to OpenAI
         await fetch(
           `https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}/submit_tool_outputs`,
           {
@@ -128,7 +129,22 @@ exports.handler = async (event) => {
       }
 
       if (status === "completed") {
-        reply = runData?.last_response?.message?.content?.trim();
+        // Final fallback to manually fetch assistant's message
+        const msgRes = await fetch(
+          `https://api.openai.com/v1/threads/${thread_id}/messages`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+              "Content-Type": "application/json",
+              "OpenAI-Beta": "assistants=v2",
+            },
+          }
+        );
+
+        const msgData = await msgRes.json();
+        const lastMsg = msgData.data?.findLast((m) => m.role === "assistant");
+
+        reply = lastMsg?.content?.[0]?.text?.value || "⚠️ No assistant reply.";
         break;
       }
 
