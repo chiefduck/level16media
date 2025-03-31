@@ -17,7 +17,7 @@ exports.handler = async (event, context) => {
     const requestData = JSON.parse(event.body);
     const { phone_number, name, email, pathway_id } = requestData;
     
-    if (!phone || !/^\d{10}$/.test(phone)) {
+    if (!phone_number || !/^\d{10}$/.test(phone_number)) {
       return {
         statusCode: 400,
         body: JSON.stringify({ message: "Phone number is required and must be 10 digits." })
@@ -129,16 +129,15 @@ async function createOrUpdateGHLContact(phoneNumber, name, email) {
     
     // Prepare contact data including optional fields
     const contactData = {
-      phone: formattedPhone,
+      phone: phoneNumber,
       name,
       email,
-      source: source || "Voice Demo",
+      source: "Voice Demo",
       tags: ["AI Demo"],
       customField: {
         demo_request_date: new Date().toISOString()
       }
     };
-    
     
     // Add name and email if provided
     if (name) contactData.name = name;

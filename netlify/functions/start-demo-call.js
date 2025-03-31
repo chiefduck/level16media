@@ -232,7 +232,8 @@ exports.handler = async function(event, context) {
     };
 
   } catch (error) {
-    console.error("Unhandled error in function");
+    console.error("Unhandled error in function:", error.message, error.stack);
+
     
     return {
       statusCode: 500,
