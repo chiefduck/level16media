@@ -1,187 +1,130 @@
-// start-demo-call.js (or initiate-call.js if you choose option 2)
-// Netlify serverless function to initiate Bland.ai calls
+// netlify/functions/initiate-call.js
 
 const axios = require('axios');
 
-exports.handler = async (event, context) => {
-  // Only accept POST requests
+exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      body: JSON.stringify({ message: 'Method Not Allowed' })
+      body: JSON.stringify({ message: 'Method Not Allowed' }),
     };
   }
 
   try {
-    // Parse the incoming request
-    const requestData = JSON.parse(event.body);
-    const { phone_number, name, email, pathway_id } = requestData;
-    
+    const { phone_number, name = "Voice Demo", email = "", pathway_id } = JSON.parse(event.body);
+
     if (!phone_number || !/^\d{10}$/.test(phone_number)) {
+      console.warn("❌ Invalid phone number received:", phone_number);
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: "Phone number is required and must be 10 digits." })
+        body: JSON.stringify({ message: "Phone number is required and must be 10 digits." }),
       };
     }
-    
-    const formattedPhone = `+1${phone}`;
-    
-    
-    // Create or update contact in GHL
-    await createOrUpdateGHLContact(phone_number, name, email);
-    
-    // Initiate call with Bland.ai
-    const callResponse = await initiateBlankAICall(phone_number, pathway_id);
-    
+
+    const formattedPhone = `+1${phone_number}`;
+
+    // Step 1: Create or update contact in GHL
+    const contactId = await createOrUpdateGHLContact(formattedPhone, name, email);
+
+    // Step 2: Initiate Bland call
+    const callResponse = await initiateBlandAICall(formattedPhone, pathway_id);
+
+    console.log("✅ Bland Call + GHL Contact processed:", {
+      contactId,
+      callId: callResponse.call_id,
+    });
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         message: 'Call initiated successfully',
+        call_id: callResponse.call_id,
         success: true,
-        status: "success",
-        call_id: callResponse.call_id
-      })
+        contactId,
+      }),
     };
-  } catch (error) {
-    console.error('Error initiating call:', error);
-    
+  } catch (err) {
+    console.error("❌ initiate-call failed:", err.message);
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-        message: 'Error initiating call', 
-        error: error.message,
-        success: false
-      })
+      body: JSON.stringify({
+        message: 'Server error during call initiation.',
+        error: err.message,
+        success: false,
+      }),
     };
   }
 };
 
-async function initiateBlankAICall(phoneNumber, pathwayId) {
-  const BLAND_AI_API_KEY = process.env.BLAND_AI_API_KEY;
-  const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://your-netlify-site.netlify.app/.netlify/functions/bland-webhook';
-  
-  if (!BLAND_AI_API_KEY) {
-    throw new Error('BLAND_AI_API_KEY is not configured');
-  }
-  
-  try {
-    // Build the call payload
-    const callPayload = {
-      phone_number: phoneNumber,
-      voice: "julie",
-      wait_for_greeting: true,
-      record: true,
-      reduce_latency: true,
-      webhook_url: WEBHOOK_URL,
-      metadata: {
-        source: "website_demo",
-        phone: phoneNumber
-      }
-    };
-    
-    // If pathway_id is provided, use it instead of a task
-    if (pathwayId) {
-      callPayload.pathway_id = pathwayId;
-    } else {
-      // Default task if no pathway is specified
-      callPayload.task = "You're calling from [CompanyName] to demonstrate our AI phone service. Keep the call brief and explain that this is just a demo of our AI voice technology. Ask if they have any questions about how the technology works, and answer any basic questions about AI phone systems. Thank them for their time.";
-    }
-    
-    const response = await axios.post(
-      'https://api.bland.ai/v1/calls',
-      callPayload,
-      {
-        headers: {
-          'Authorization': `Bearer ${BLAND_AI_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    console.log('Bland.ai call initiated:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('Error calling Bland.ai API:', error);
-    throw error;
+async function createOrUpdateGHLContact(phone, name, email) {
+  const GHL_API_KEY = process.env.GHL_API_KEY;
+  if (!GHL_API_KEY) throw new Error("GHL_API_KEY is missing in env");
+
+  const headers = {
+    Authorization: `Bearer ${GHL_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  const baseUrl = "https://rest.gohighlevel.com/v1/contacts";
+
+  // Search for contact
+  const searchRes = await axios.get(`${baseUrl}/lookup?phone=${encodeURIComponent(phone)}`, { headers });
+  const existing = searchRes.data.contacts?.[0];
+
+  const contactData = {
+    phone,
+    firstName: name?.split(" ")[0] || "Voice",
+    lastName: name?.split(" ").slice(1).join(" ") || "Lead",
+    email,
+    tags: ["AI Voice Demo"],
+    source: "Voice Demo Call",
+    customField: {
+      demo_request_date: new Date().toISOString(),
+    },
+  };
+
+  if (existing) {
+    console.log("🛠 Updating existing contact:", existing.id);
+    await axios.put(`${baseUrl}/${existing.id}`, contactData, { headers });
+    return existing.id;
+  } else {
+    console.log("🆕 Creating new contact...");
+    const createRes = await axios.post(baseUrl, contactData, { headers });
+    return createRes.data.contact?.id;
   }
 }
 
-async function createOrUpdateGHLContact(phoneNumber, name, email) {
-  const GHL_API_KEY = process.env.GHL_API_KEY;
-  
-  if (!GHL_API_KEY) {
-    throw new Error('GHL_API_KEY is not configured');
-  }
-  
-  try {
-    // First, search for the contact by phone number
-    const searchResponse = await axios.get(
-      `https://rest.gohighlevel.com/v1/contacts/search?query=${phoneNumber}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${GHL_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    let contactId;
-    
-    // Prepare contact data including optional fields
-    const contactData = {
+async function initiateBlandAICall(phoneNumber, pathwayId) {
+  const BLAND_AI_API_KEY = process.env.BLAND_AI_API_KEY;
+  const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://your-netlify-site.netlify.app/.netlify/functions/bland-webhook';
+
+  if (!BLAND_AI_API_KEY) throw new Error("BLAND_AI_API_KEY is missing");
+
+  const payload = {
+    phone_number: phoneNumber,
+    voice: "julie",
+    wait_for_greeting: true,
+    record: true,
+    reduce_latency: true,
+    webhook_url: WEBHOOK_URL,
+    metadata: {
+      source: "Voice Demo Site",
       phone: phoneNumber,
-      name,
-      email,
-      source: "Voice Demo",
-      tags: ["AI Demo"],
-      customField: {
-        demo_request_date: new Date().toISOString()
-      }
-    };
-    
-    // Add name and email if provided
-    if (name) contactData.name = name;
-    if (email) contactData.email = email;
-    
-    // Check if contact exists
-    if (searchResponse.data.contacts && searchResponse.data.contacts.length > 0) {
-      contactId = searchResponse.data.contacts[0].id;
-      
-      // Update existing contact
-      await axios.put(
-        `https://rest.gohighlevel.com/v1/contacts/${contactId}`,
-        contactData,
-        {
-          headers: {
-            'Authorization': `Bearer ${GHL_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      console.log(`Updated existing GHL contact: ${contactId}`);
-    } else {
-      // Create new contact (add tags for new contacts)
-      contactData.tags = ["AI Demo Request"];
-      
-      const createResponse = await axios.post(
-        'https://rest.gohighlevel.com/v1/contacts/',
-        contactData,
-        {
-          headers: {
-            'Authorization': `Bearer ${GHL_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      contactId = createResponse.data.contact.id;
-      console.log(`Created new GHL contact: ${contactId}`);
-    }
-    
-    return contactId;
-  } catch (error) {
-    console.error('Error managing GHL contact:', error);
-    throw error;
+    },
+  };
+
+  if (pathwayId) {
+    payload.pathway_id = pathwayId;
+  } else {
+    payload.task = "You're calling from [CompanyName] to demonstrate our AI voice assistant. Keep it brief and explain that this is a live demo.";
   }
+
+  const response = await axios.post("https://api.bland.ai/v1/calls", payload, {
+    headers: {
+      Authorization: `Bearer ${BLAND_AI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return response.data;
 }
