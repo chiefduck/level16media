@@ -28,19 +28,25 @@ exports.handler = async (event) => {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v2", // ✅ this line
       },
       body: JSON.stringify({ role: "user", content: message }),
     });
 
     // Step 3: Run the assistant
     const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ assistant_id: ASSISTANT_ID }),
-    });
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2", // ✅ Keep this here
+        },
+        body: JSON.stringify({
+          assistant_id: ASSISTANT_ID,
+          tool_choice: "auto" // ✅ Add this!
+        }),
+      });
+      
 
     const runData = await runRes.json();
     const runId = runData.id;
@@ -57,6 +63,7 @@ exports.handler = async (event) => {
           headers: {
             Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             "Content-Type": "application/json",
+            "OpenAI-Beta": "assistants=v2", // ✅ this line
           },
         }
       );
@@ -86,6 +93,7 @@ exports.handler = async (event) => {
           headers: {
             Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             "Content-Type": "application/json",
+            "OpenAI-Beta": "assistants=v2", // ✅ this line
           },
           body: JSON.stringify({
             tool_outputs: [
@@ -107,6 +115,7 @@ exports.handler = async (event) => {
               headers: {
                 Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
                 "Content-Type": "application/json",
+                "OpenAI-Beta": "assistants=v2", // ✅ this line
               },
             }
           );
@@ -121,19 +130,21 @@ exports.handler = async (event) => {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v2", // ✅ this line
       },
     });
 
     const msgData = await msgRes.json();
     const last = msgData.data.reverse().find((m) => m.role === "assistant");
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        reply: last?.content?.[0]?.text?.value || "No response.",
-        thread_id: threadId,
-      }),
-    };
+return {
+  statusCode: 200,
+  body: JSON.stringify({
+    reply: last?.content?.[0]?.text?.value || "⚠️ No response from assistant.",
+    thread_id: threadId,
+  }),
+};
+
   } catch (err) {
     console.error("Assistant Error:", err);
     return {
