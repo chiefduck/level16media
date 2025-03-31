@@ -32,8 +32,6 @@ exports.handler = async (event) => {
       console.log("🔄 run status:", runData.status);
       console.log("📨 message content:", runData?.last_response?.message?.content);
       console.log("🛠️ Required action type:", runData.required_action?.type);
-console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
-
 
       status = runData.status;
 
@@ -42,18 +40,17 @@ console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
         runData.required_action?.type === "submit_tool_outputs"
       ) {
         const toolCalls = runData.required_action.submit_tool_outputs.tool_calls;
-      
-        // ✅ Now toolCalls is defined, safe to log
+
         console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
-      
+
         const results = await Promise.all(
           toolCalls.map(async (tool) => {
             const fnName = tool.function.name;
             const args = JSON.parse(tool.function.arguments || "{}");
-      
+
             console.log("🔧 Tool called:", fnName);
             console.log("📦 Tool args:", args);
-      
+
             if (fnName === "create_lead") {
               const res = await fetch(`${process.env.URL}/.netlify/functions/create-lead`, {
                 method: "POST",
@@ -64,14 +61,14 @@ console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
                   email: args.email,
                 }),
               });
-      
+
               const data = await res.json();
               return {
                 tool_call_id: tool.id,
                 output: data?.message || "Lead created.",
               };
             }
-      
+
             if (fnName === "initiate_demo_call") {
               try {
                 const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
@@ -82,17 +79,17 @@ console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
                     phone: args.phone,
                     email: args.email || "",
                     pathway_id: args.pathway_id || "",
-                    source: "AI Chatbot"
+                    source: "AI Chatbot",
                   }),
                 });
-      
+
                 const blandData = await blandRes.json();
                 console.log("📞 Bland response:", blandData);
-      
+
                 if (!blandRes.ok) {
                   throw new Error(`Bland call failed: ${JSON.stringify(blandData)}`);
                 }
-      
+
                 return {
                   tool_call_id: tool.id,
                   output: `Call initiated successfully: ${blandData.call_id || "no ID"}`,
@@ -105,16 +102,14 @@ console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
                 };
               }
             }
-      
+
             return {
               tool_call_id: tool.id,
               output: `Unknown tool: ${fnName}`,
             };
           })
         );
-      
 
-        // 🔁 submit tool outputs and continue the loop naturally
         await fetch(
           `https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}/submit_tool_outputs`,
           {
@@ -129,8 +124,7 @@ console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
         );
 
         await new Promise((r) => setTimeout(r, 1500));
-        // continue is now implicit by letting the loop proceed
-        continue; // <-- you can remove this safely
+        continue;
       }
 
       if (status === "completed") {
@@ -156,5 +150,3 @@ console.log("🔧 Tool call raw payload:", JSON.stringify(toolCalls, null, 2));
     };
   }
 };
-
-
