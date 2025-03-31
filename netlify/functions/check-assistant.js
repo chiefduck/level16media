@@ -14,7 +14,7 @@ exports.handler = async (event) => {
     let status = "in_progress";
     let reply = null;
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       const runRes = await fetch(
         `https://api.openai.com/v1/threads/${thread_id}/runs/${run_id}`,
         {
@@ -29,6 +29,9 @@ exports.handler = async (event) => {
 
       const runData = await runRes.json();
       console.log("🧪 RAW run response:", JSON.stringify(runData, null, 2));
+      console.log("🔄 run status:", runData.status);
+console.log("📨 message content:", runData?.last_response?.message?.content);
+
 
       status = runData.status;
 
@@ -104,7 +107,7 @@ exports.handler = async (event) => {
         );
 
         // Wait before checking again
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
 
@@ -115,7 +118,7 @@ exports.handler = async (event) => {
       }
 
       // Wait before next check
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1500));
     }
 
     return {
