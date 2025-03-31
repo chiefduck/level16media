@@ -129,7 +129,7 @@ exports.handler = async (event) => {
       }
 
       if (status === "completed") {
-        // Final fallback to manually fetch assistant's message
+        // Try to fetch the assistant's most recent message manually
         const msgRes = await fetch(
           `https://api.openai.com/v1/threads/${thread_id}/messages`,
           {
@@ -140,13 +140,19 @@ exports.handler = async (event) => {
             },
           }
         );
-
+      
         const msgData = await msgRes.json();
         const lastMsg = msgData.data?.findLast((m) => m.role === "assistant");
-
-        reply = lastMsg?.content?.[0]?.text?.value || "⚠️ No assistant reply.";
+      
+        console.log("🧠 Assistant lastMsg object:", JSON.stringify(lastMsg, null, 2));
+      
+        // Extract clean message text or fallback
+        reply =
+          lastMsg?.content?.[0]?.text?.value?.trim() ||
+          "✅ Lead captured! Would you like to see the AI Voice Bot in action?";
         break;
       }
+      
 
       await new Promise((r) => setTimeout(r, 1500));
     }
