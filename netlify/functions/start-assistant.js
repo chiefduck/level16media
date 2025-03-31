@@ -30,21 +30,30 @@ exports.handler = async (event) => {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
+        "OpenAI-Beta": "assistants=v2"
+
       },
       body: JSON.stringify({ role: "user", content: message }),
     });
 
     // Start assistant run
     const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ assistant_id: ASSISTANT_ID }),
-    });
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2", // ✅ CRUCIAL for Assistant v2
+        },
+        body: JSON.stringify({ assistant_id: ASSISTANT_ID }),
+      });
+      
 
-    const runData = await runRes.json();
+      const runText = await runRes.text();
+      console.log("🧪 RAW run response:", runText); // 🔍 DEBUG this
+      
+      const runData = JSON.parse(runText);
+      console.log("🏃‍♂️ Started assistant run:", runData.id);
+      
 
     return {
       statusCode: 200,
