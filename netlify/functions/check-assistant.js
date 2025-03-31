@@ -67,16 +67,19 @@ exports.handler = async (event) => {
             }
 
             if (fnName === "initiate_demo_call") {
-              try {
-                const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    name: args.name,
-                    phone: args.phone,
-                  }),
-                });
-
+                try {
+                  const blandRes = await fetch(`${process.env.URL}/.netlify/functions/initiate-call`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: args.name,
+                      phone: args.phone,
+                      email: args.email || "",
+                      pathway_id: args.pathway_id || "",
+                      source: "AI Chatbot"
+                    }),
+                  });
+              
                 const blandData = await blandRes.json();
 
                 console.log("📞 Bland response:", blandData);

@@ -82,26 +82,27 @@ exports.handler = async (event, context) => {
 };
 
 // Handle when a call is initiated
-async function handleCallStarted(data) {
-  const { call_id, phone_number } = data;
-  
+async function handleCallStarted({ call_id, phone_number }) {
+  const formattedPhone = phone_number.startsWith('+') 
+    ? phone_number 
+    : `+1${phone_number.replace(/\D/g, '')}`;
+
   try {
-    // Format phone for GHL (add +1 prefix for US numbers)
-    const formattedPhone = phone_number.startsWith('+') ? phone_number : `+1${phone_number.replace(/\D/g, '')}`;
-    
-    // Update GHL with call started status
-    await updateGHLContact(formattedPhone, {
+    const updated = await updateGHLContact(formattedPhone, {
       customField: {
-        "call_status": "active",
-        "call_id": call_id,
-        "call_start_time": new Date().toISOString()
-      }
+        call_status: 'active',
+        call_id,
+        call_start_time: new Date().toISOString(),
+      },
     });
-    
-    // Add a note about the call starting
+
+    if (!updated) {
+      console.log("⚠️ No GHL contact found, creating fallback...");
+      await createMinimalContact(formattedPhone);
+    }
+
     await addGHLNote(formattedPhone, `Call started at ${new Date().toLocaleString()}. Call ID: ${call_id}`);
-    
-    console.log(`Call started with ID ${call_id} to ${phone_number}`);
+    console.log(`Call started with ID ${call_id} to ${formattedPhone}`);
   } catch (error) {
     console.error('Error handling call.started event:', error);
   }
@@ -357,7 +358,7 @@ async function addGHLNote(phoneNumber, noteText) {
           })
         }
       );
-      
+
       if (!noteResponse.ok) {
         throw new Error(`GHL note creation failed: ${noteResponse.status}`);
       }
@@ -372,4 +373,21 @@ async function addGHLNote(phoneNumber, noteText) {
     console.error('Error adding GHL note:', error);
     throw error;
   }
+}
+
+async function createMinimalContact(phone, source = 'Voice Demo') {
+  const GHL_API_KEY = process.env.GHL_API_KEY;
+  await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${GHL_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      phone,
+      name: 'Voice Demo Lead',
+      source,
+      tags: ['AI Demo', 'Voice Only'],
+    }),
+  });
 }
