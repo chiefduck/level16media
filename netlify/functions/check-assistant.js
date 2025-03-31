@@ -142,14 +142,24 @@ exports.handler = async (event) => {
         );
       
         const msgData = await msgRes.json();
-        const lastMsg = msgData.data?.findLast((m) => m.role === "assistant");
+       // Sort messages by creation time to ensure proper sequence
+const sortedMessages = msgData.data?.sort((a, b) => a.created_at - b.created_at);
+
+// Find the most recent assistant reply *after* a tool_use
+let lastMsg = null;
+for (let i = sortedMessages.length - 1; i >= 0; i--) {
+  const m = sortedMessages[i];
+  if (m.role === "assistant") {
+    lastMsg = m;
+    break;
+  }
+}
       
         console.log("🧠 Assistant lastMsg object:", JSON.stringify(lastMsg, null, 2));
       
         // Extract clean message text or fallback
-        reply =
-          lastMsg?.content?.[0]?.text?.value?.trim() ||
-          "✅ Lead captured! Would you like to see the AI Voice Bot in action?";
+        reply = lastMsg?.content?.[0]?.text?.value || "⚠️ No assistant reply.";
+
         break;
       }
       
