@@ -115,7 +115,7 @@ exports.handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           status: "completed",
-          reply: runData.last_response?.message?.content || "✅ Done.",
+          reply: runData.last_response?.message?.content || "",
         }),
       };
     }
