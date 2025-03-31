@@ -1,5 +1,3 @@
-// components/ChatPreview.tsx
-
 import React, { useState, useEffect, useRef } from 'react';
 
 export function ChatPreview() {
@@ -9,88 +7,99 @@ export function ChatPreview() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [isInAssistantMode, setIsInAssistantMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Scroll to bottom when new messages appear
+  const triggerWords = ['yes', 'interested', 'book', 'try it', 'let\'s do it', 'sounds good', 'demo'];
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
 
-  // Load thread ID if it exists
-  useEffect(() => {
-    const saved = localStorage.getItem('thread_id');
-    if (saved) setThreadId(saved);
-  }, []);
-
-  // Save thread ID for memory
-  useEffect(() => {
-    if (threadId) {
-      localStorage.setItem('thread_id', threadId);
-    }
-  }, [threadId]);
-
   const handleSend = async () => {
     if (!input.trim()) return;
-  
+
     const userMessage = { type: 'user', text: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
-  
+
+    const messageText = input.toLowerCase();
+
+    // Check for trigger words
+    const shouldSwitch = triggerWords.some((word) => messageText.includes(word));
+
+    if (!isInAssistantMode && shouldSwitch) {
+      console.log('🧠 Switching to Assistant API...');
+      setIsInAssistantMode(true);
+      await handleAssistant(input);
+    } else if (isInAssistantMode) {
+      await handleAssistant(input);
+    } else {
+      await handleFastGPT(input);
+    }
+
+    setIsTyping(false);
+  };
+
+  const handleFastGPT = async (msg: string) => {
     try {
-      // Step 1: Start Assistant run
-      const startRes = await fetch('/.netlify/functions/start-assistant', {
+      const res = await fetch('/.netlify/functions/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: input,
-          thread_id: threadId,
-        }),
+        body: JSON.stringify({ message: msg }),
       });
-  
-      const { thread_id, run_id } = await startRes.json();
+
+      const data = await res.json();
+      const reply = data.reply || "Hmm, I didn’t quite catch that.";
+      setMessages((prev) => [...prev, { type: 'bot', text: reply }]);
+    } catch (err) {
+      console.error('GPT Error:', err);
+      setMessages((prev) => [...prev, { type: 'bot', text: 'Something went wrong. Try again later.' }]);
+    }
+  };
+
+  const handleAssistant = async (msg: string) => {
+    try {
+      // Step 1: Start assistant run
+      const start = await fetch('/.netlify/functions/start-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, thread_id: threadId }),
+      });
+
+      const { thread_id, run_id } = await start.json();
       if (thread_id && !threadId) setThreadId(thread_id);
-  
+
       // Step 2: Poll for result
       let status = 'queued';
       let reply = '';
       let retries = 0;
-  
-      while (status !== 'completed' && retries < 15) {
+
+      while (status !== 'completed' && retries < 30) {
         await new Promise((res) => setTimeout(res, 1000));
         retries++;
-  
-        const checkRes = await fetch('/.netlify/functions/check-assistant', {
+
+        const check = await fetch('/.netlify/functions/check-assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ thread_id, run_id }),
         });
-  
-        const data = await checkRes.json();
-        status = data.status;
-  
-        if (data.reply) {
-          reply = data.reply;
-          break; // reply found!
+
+        const result = await check.json();
+        status = result.status;
+        if (result.reply) {
+          reply = result.reply;
+          break;
         }
       }
-  
-      if (!reply) {
-        reply = '⚠️ Sorry, that took too long — try again.';
-      }
-  
-      setMessages((prev) => [...prev, { type: 'bot', text: reply }]);
+
+      setMessages((prev) => [...prev, { type: 'bot', text: reply || '⚠️ Sorry, that took too long — try again.' }]);
     } catch (err) {
-      console.error('Assistant error:', err);
-      setMessages((prev) => [
-        ...prev,
-        { type: 'bot', text: '⚠️ Something went wrong. Please try again later.' },
-      ]);
-    } finally {
-      setIsTyping(false);
+      console.error('Assistant Error:', err);
+      setMessages((prev) => [...prev, { type: 'bot', text: '⚠️ Something went wrong with the assistant.' }]);
     }
   };
-    
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSend();
@@ -102,18 +111,14 @@ export function ChatPreview() {
 
       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 space-y-4 max-h-[400px] overflow-y-auto">
         {messages.map((msg, idx) => (
-          <div
-            key={idx}
-            className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} fade-in`}
-          >
-            <div
-              className={`max-w-[75%] p-3 rounded-2xl ${
-                msg.type === 'user'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white/20 text-white'
-              }`}
-              dangerouslySetInnerHTML={{ __html: msg.text }}
-            />
+          <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} fade-in`}>
+            <div className={`max-w-[75%] p-3 rounded-2xl ${
+              msg.type === 'user'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white/20 text-white'
+            }`}>
+              {msg.text}
+            </div>
           </div>
         ))}
         {isTyping && (

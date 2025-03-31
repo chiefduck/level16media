@@ -13,30 +13,16 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         model: "gpt-3.5-turbo",
         temperature: 0.7,
+        top_p: 1,
         messages: [
           {
             role: "system",
             content:
-              "You are an AI chatbot working for a digital marketing agency named Level 16 Media. Be helpful, confident, and focused on lead generation, AI voice assistants, and marketing strategy.",
+              "You are an AI chatbot working for a digital marketing agency named Level 16 Media. Be helpful, confident, and focused on lead generation, AI voice assistants, and marketing strategy. If users ask off-topic questions, redirect them back to marketing help.",
           },
           {
-            role: "system",
-            content: `
-          You are the AI Assistant for Level 16 Media — a digital marketing agency that helps businesses generate more leads through AI-powered voice assistants, automated funnels, chatbots, and appointment-setting tools.
-          
-          ONLY answer questions related to:
-          - AI marketing tools
-          - Lead generation
-          - CRM and automation
-          - Chatbots
-          - Funnels and ads
-          - Demo setup and consultation
-          
-          If someone asks something off-topic (weather, trivia, jokes, etc.), politely redirect the conversation back to how you can help with marketing, automation, or growth.
-          
-          NEVER mention that you're an AI, ChatGPT, or built by OpenAI. Only refer to yourself as the Level 16 AI Assistant.
-          Be confident, clear, and focused on helping the user take action. Always guide them toward booking a demo if appropriate.
-          `
+            role: "user",
+            content: message,
           },
         ],
       }),
