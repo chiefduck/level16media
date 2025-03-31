@@ -38,7 +38,7 @@ export function ChatPreview() {
     setIsTyping(true);
   
     try {
-      // Step 1: Start the Assistant run
+      // Step 1: Start Assistant run
       const startRes = await fetch('/.netlify/functions/start-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,12 +51,12 @@ export function ChatPreview() {
       const { thread_id, run_id } = await startRes.json();
       if (thread_id && !threadId) setThreadId(thread_id);
   
-      // Step 2: Poll for result from /check-assistant
+      // Step 2: Poll for result
       let status = 'queued';
       let reply = '';
       let retries = 0;
   
-      while (status !== 'completed' && retries < 12) {
+      while (status !== 'completed' && retries < 15) {
         await new Promise((res) => setTimeout(res, 1000));
         retries++;
   
@@ -69,8 +69,9 @@ export function ChatPreview() {
         const data = await checkRes.json();
         status = data.status;
   
-        if (status === 'completed') {
+        if (data.reply) {
           reply = data.reply;
+          break; // reply found!
         }
       }
   
@@ -88,7 +89,8 @@ export function ChatPreview() {
     } finally {
       setIsTyping(false);
     }
-  };  
+  };
+    
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSend();
