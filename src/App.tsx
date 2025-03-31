@@ -53,7 +53,6 @@ function App() {
           </Routes>
           <Footer />
           <ScrollToTop />
-          <ChatPreview />
         </div>
       </div>
     </BrowserRouter>
